@@ -45,6 +45,7 @@ py_test(
       "@benchmark_database//load:benchmark_database",
       "@benchmark_database//serialization:database_serializer",
       "//modules/runtime/viewer:matplotlib_viewer",
+    "//modules/runtime/viewer:video_renderer",
       "//modules/runtime/commons:parameters",
       ],
 )

@@ -16,6 +16,8 @@ from modules.benchmark.benchmark_runner_mp import BenchmarkRunnerMP
 from modules.benchmark.benchmark_analyzer import BenchmarkAnalyzer
 
 from modules.runtime.viewer.matplotlib_viewer import MPViewer
+from modules.runtime.viewer.video_renderer import VideoRenderer
+
 
 from bark.world.evaluation import *
 from modules.runtime.commons.parameters import ParameterServer
@@ -74,15 +76,17 @@ class DatabaseRunnerTests(unittest.TestCase):
               y_length = 120,
               enforce_y_length=True,
               axis = ax1)
+
         viewer2 = MPViewer(
               params=params2,
               center=[5112, 5165],
               y_length = 120,
               enforce_y_length=True,
               axis = ax2)
+        video_renderer = VideoRenderer(renderer=viewer2, world_step_time=0.2)
         analyzer.visualize(configs_idx_list = [configs[1:3], configs_const[1:3]],
-                          viewer = [viewer1, viewer2], viewer_names=["IDM", "ConstVelocity"], real_time_factor=1, fontsize=12)
-
+                          viewer = [viewer1, video_renderer], viewer_names=["IDM", "ConstVelocity"], real_time_factor=1, fontsize=12)
+        video_renderer.export_video("./test_parallel")
 
 
 if __name__ == '__main__':
