@@ -86,26 +86,32 @@ class BenchmarkAnalyzer:
           while steps_to_go:
               step += 1
               steps_to_go = False
+              worlds_collected = {}
               for viewer_idx in range(0, len(viewer_list)):
                   histories = histories_collected[viewer_idx]
                   if len(histories) < step:
                     continue
+                  else:
+                    viewer_list[viewer_idx].clear()
                   steps_to_go = True
                   scenario = histories[step-1]
                   viewer = viewer_list[viewer_idx]
-                  world = scenario.get_world_state()
-                  world.time = world_time
                   if display_info and not viewer_names:
                       info_text = info_strings_collected[viewer_idx]
                       viewer.drawText(text=info_text, position=(0.5,1.05), **kwargs)
                   elif viewer_names:
                       viewer.drawText(text=viewer_names[viewer_idx], position=(0.5,1.05), **kwargs)
-                  viewer.drawWorld(world = world,
-                              eval_agent_ids = scenario.eval_agent_ids, \
+                  world = scenario.get_world_state()
+                  world.time = world_time
+                  worlds_collected[viewer_idx] = (world, scenario.eval_agent_ids)
+              for viewer_idx, world in worlds_collected.items():
+                  start = time.time()
+                  viewer_list[viewer_idx].drawWorld(world = world[0],
+                              eval_agent_ids = world[1], \
                               scenario_idx = None, debug_text=False)
-                  viewer_list[viewer_idx].show()
+                  end = time.time()
+                  print("drawing took: {}".format(end-start))
               world_time += sim_time
               if real_time_factor:
                   time.sleep(step_time)
-              for viewer_idx in range(0, len(viewer_list)):
-                  viewer_list[viewer_idx].clear()
+              viewer_list[0].show()

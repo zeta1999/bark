@@ -103,7 +103,6 @@ class MPViewer(BaseViewer):
         # self.clear()
         super(MPViewer, self).drawWorld(world, eval_agent_ids, filename, scenario_idx, debug_text)
         self._set_visualization_options()
-        self.show()
         if filename:
             self.axes.get_figure().savefig(filename)
 
