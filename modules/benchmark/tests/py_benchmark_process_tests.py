@@ -62,8 +62,8 @@ class DatabaseRunnerTests(unittest.TestCase):
         configs = analyzer.find_configs(criteria={"behavior": lambda x: x=="IDM", "success": lambda x : not x})
         configs_const = analyzer.find_configs(criteria={"behavior": lambda x: x=="Const", "success": lambda x : not x})
 
-        #analyzer.visualize(configs_idx_list = configs,
-                         # viewer = viewer, real_time_factor=10, fontsize=12)
+        analyzer.visualize(configs_idx_list = configs,
+                          viewer = viewer, real_time_factor=10, fontsize=12)
         plt.close(fig)
 
         

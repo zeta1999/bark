@@ -105,12 +105,9 @@ class BenchmarkAnalyzer:
                   world.time = world_time
                   worlds_collected[viewer_idx] = (world, scenario.eval_agent_ids)
               for viewer_idx, world in worlds_collected.items():
-                  start = time.time()
                   viewer_list[viewer_idx].drawWorld(world = world[0],
                               eval_agent_ids = world[1], \
                               scenario_idx = None, debug_text=False)
-                  end = time.time()
-                  print("drawing took: {}".format(end-start))
               world_time += sim_time
               if real_time_factor:
                   time.sleep(step_time)
