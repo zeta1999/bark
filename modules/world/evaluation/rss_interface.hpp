@@ -16,6 +16,8 @@
 #include "modules/models/dynamic/dynamic_model.hpp"
 #include "modules/world/map/map_interface.hpp"
 #include "modules/world/world.hpp"
+#include "modules/geometry/line.hpp"
+#include "modules/geometry/commons.hpp"
 
 #include <spdlog/spdlog.h>
 #include <ad/map/lane/Operation.hpp>
@@ -32,6 +34,7 @@
 #include <ad/rss/state/RssStateOperation.hpp>
 #include <ad/rss/state/RssStateSnapshot.hpp>
 #include <ad/rss/world/RssDynamics.hpp>
+#include <ad/physics/MetricRange.hpp>
 #include <boost/geometry.hpp>
 #include <boost/geometry/geometries/geometries.hpp>
 
@@ -88,8 +91,8 @@ class RssInterface {
       const models::dynamic::State &agent_state, const Polygon &agent_shape,
       const Distance &match_distance);
 
-  ::ad::map::route::FullRoute GenerateRoute(const Point2d &agent_center,
-      const map::LaneCorridorPtr &agent_lane_corridor,
+  ::ad::map::route::FullRoute GenerateRoute(const Point2d &start,const Point2d &end,
+      const std::vector<map::LaneCorridorPtr> &lane_corridors,
       const ::ad::map::match::Object &matched_object);
 
   AgentState ConvertAgentState(

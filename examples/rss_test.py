@@ -7,9 +7,9 @@ import numpy as np
 import time
 import os
 from modules.runtime.commons.parameters import ParameterServer
-from modules.runtime.viewer.pygame_viewer import PygameViewer
+from modules.runtime.viewer.matplotlib_viewer import MPViewer
 from modules.runtime.commons.xodr_parser import XodrParser
-from bark.models.behavior import BehaviorConstantVelocity
+from bark.models.behavior import *
 from bark.models.execution import ExecutionModelInterpolate
 from bark.models.dynamic import SingleTrackModel
 from bark.world import World
@@ -37,7 +37,8 @@ behavior_model2 = BehaviorConstantVelocity(param_server)
 execution_model2 = ExecutionModelInterpolate(param_server)
 dynamic_model2 = SingleTrackModel(param_server)
 
-map_path="modules/runtime/tests/data/centered_city_highway_straight.xodr"
+# map_path="modules/runtime/tests/data/centered_city_highway_straight.xodr"
+map_path="modules/runtime/tests/data/DR_DEU_Merging_MT_v01_shifted.xodr"
 
 # Map Definition
 xodr_parser = XodrParser(map_path)
@@ -47,9 +48,9 @@ world.SetMap(map_interface)
 
 # Agent Definition
 agent_2d_shape = CarLimousine()
-init_state = np.array([0, 1.8, -120, 0, 10])
+init_state = np.array([0, 1003, 1006, 0, 10])
 goal_polygon = Polygon2d([0, 0, 0],[Point2d(-1,-1),Point2d(-1,1),Point2d(1,1), Point2d(1,-1)])
-goal_polygon = goal_polygon.Translate(Point2d(1.8,120))
+goal_polygon = goal_polygon.Translate(Point2d(883,1008))
 agent_params = param_server.addChild("agent1")
 agent1 = Agent(init_state,
                behavior_model,
@@ -62,7 +63,7 @@ agent1 = Agent(init_state,
 world.AddAgent(agent1)
 
 agent_2d_shape2 = CarLimousine()
-init_state2 = np.array([0, 1.8, -50, 0, 5])
+init_state2 = np.array([0, 1003, 1003, 0, 9])
 agent_params2 = param_server.addChild("agent2")
 agent2 = Agent(init_state2,
                behavior_model2,
@@ -75,7 +76,7 @@ agent2 = Agent(init_state2,
 world.AddAgent(agent2)
 
 # viewer
-viewer = PygameViewer(params=param_server, follow_agent_id=agent1.id)
+viewer = MPViewer(params=param_server, follow_agent_id=agent1.id)
 
 # World Simulation
 sim_step_time = param_server["simulation"]["step_time",
@@ -86,13 +87,15 @@ sim_real_time_factor = param_server["simulation"]["real_time_factor",
                                                   1]
 e=EvaluatorRss(agent1.id,map_path)
 world.Step(0.5)
-print("wtf",e.Evaluate(world))
+print("Initial safety",e.Evaluate(world))
 
-for _ in range(0, 30):
+for _ in range(0, 100):
   viewer.clear()
   world.Step(sim_step_time)
   print(e.Evaluate(world))
   viewer.drawWorld(world)
+  # for l in agent1.road_corridor.lane_corridors:
+  #   viewer.drawLaneCorridor(l)
   viewer.show(block=False)
   time.sleep(sim_step_time/sim_real_time_factor)
 

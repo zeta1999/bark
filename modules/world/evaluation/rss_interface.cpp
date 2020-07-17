@@ -28,7 +28,7 @@ bool RssInterface::initializeOpenDriveMap(
   // 2nd argument: the value to reduce overlapping between two lanes they are
   // intersected
   bool result = ::ad::map::access::initFromOpenDriveContent(
-      opendrive_file_content, 0,
+      opendrive_file_content, 0.2,
       ::ad::map::intersection::IntersectionType::TrafficLight,
       ::ad::map::landmark::TrafficLightType::UNKNOWN);
 
@@ -57,8 +57,10 @@ bool RssInterface::initializeOpenDriveMap(
   return dynamics;
 }
 
-::ad::rss::world::RssDynamics RssInterface::GenerateDefaultVehicleDynamicsParameters() {
-  return GenerateVehicleDynamicsParameters(3.5, -8., -4., -3., 0.2, -0.8, 0.1, 1.);
+::ad::rss::world::RssDynamics
+RssInterface::GenerateDefaultVehicleDynamicsParameters() {
+  return GenerateVehicleDynamicsParameters(3.5, -8., -4., -3., 0.2, -0.8, 0.1,
+                                           1.);
 }
 
 ::ad::map::match::Object RssInterface::GetMatchObject(
@@ -69,17 +71,17 @@ bool RssInterface::initializeOpenDriveMap(
       Point2d(agent_state(X_POSITION), agent_state(Y_POSITION));
 
   matching_object.enuPosition.centerPoint.x =
-      ENUCoordinate(static_cast<double>(bg::get<0>(agent_center)));
+      ENUCoordinate(bg::get<0>(agent_center));
   matching_object.enuPosition.centerPoint.y =
-      ENUCoordinate(static_cast<double>(bg::get<1>(agent_center)));
+      ENUCoordinate(bg::get<1>(agent_center));
   matching_object.enuPosition.centerPoint.z = ENUCoordinate(0);
-  matching_object.enuPosition.heading = ::ad::map::point::createENUHeading(
-      static_cast<double>(agent_state(THETA_POSITION)));
+  matching_object.enuPosition.heading =
+      ::ad::map::point::createENUHeading(agent_state(THETA_POSITION));
 
-  matching_object.enuPosition.dimension.length = static_cast<double>(
-      Distance(agent_shape.front_dist_ + agent_shape.rear_dist_));
-  matching_object.enuPosition.dimension.width = static_cast<double>(
-      Distance(agent_shape.left_dist_ + agent_shape.right_dist_));
+  matching_object.enuPosition.dimension.length =
+      Distance(agent_shape.front_dist_ + agent_shape.rear_dist_);
+  matching_object.enuPosition.dimension.width =
+      Distance(agent_shape.left_dist_ + agent_shape.right_dist_);
   matching_object.enuPosition.dimension.height = Distance(1.5);
   matching_object.enuPosition.enuReferencePoint =
       ::ad::map::access::getENUReferencePoint();
@@ -91,23 +93,32 @@ bool RssInterface::initializeOpenDriveMap(
   return matching_object;
 }
 
-FullRoute RssInterface::GenerateRoute(const Point2d &agent_center,
-    const map::LaneCorridorPtr &agent_lane_corridor,
+FullRoute RssInterface::GenerateRoute(
+    const Point2d &start, const Point2d &end,
+    const std::vector<map::LaneCorridorPtr> &lane_corridors,
     const ::ad::map::match::Object &matched_object) {
-  geometry::Line agent_lane_center_line = agent_lane_corridor->GetCenterLine();
-
-  float s_start = GetNearestS(agent_lane_center_line, agent_center);
-  float s_end = GetNearestS(
-      agent_lane_center_line,
-      agent_lane_center_line.obj_.at(agent_lane_center_line.obj_.size() - 1));
-
   std::vector<::ad::map::point::ENUPoint> routing_targets;
 
-  while (s_start <= s_end) {
-    geometry::Point2d traj_point = GetPointAtS(agent_lane_center_line, s_start);
-    routing_targets.push_back(::ad::map::point::createENUPoint(
-        bg::get<0>(traj_point), bg::get<1>(traj_point), 0));
-    s_start += 2;
+  for (int i = 0; i < lane_corridors.size(); ++i) {
+    geometry::Line center_line = lane_corridors[i]->GetCenterLine();
+    float s_start, s_end;
+    if (i == 0)
+      s_start = GetNearestS(center_line, start);
+    else
+      s_start = 0;
+
+    if (i != lane_corridors.size() - 1)
+      s_end = GetNearestS(center_line,
+                          center_line.obj_.at(center_line.obj_.size() - 1));
+    else
+      s_end = GetNearestS(center_line, end);
+
+    while (s_start <= s_end) {
+      geometry::Point2d traj_point = GetPointAtS(center_line, s_start);
+      routing_targets.push_back(::ad::map::point::createENUPoint(
+          bg::get<0>(traj_point), bg::get<1>(traj_point), 0));
+      s_start += 3;
+    }
   }
 
   std::vector<FullRoute> routes;
@@ -134,6 +145,7 @@ FullRoute RssInterface::GenerateRoute(const Point2d &agent_center,
       FullRoute route = ::ad::map::route::planning::planRoute(
           route_starting_point, routing_targets,
           ::ad::map::route::RouteCreationMode::AllRoutableLanes);
+      // std::cout<<route<<std::endl;
       routes.push_back(route);
       routes_probability.push_back(position.probability);
     } else {
@@ -168,11 +180,10 @@ AgentState RssInterface::ConvertAgentState(
 
   rss_state.timestamp = agent_state(TIME_POSITION);
   rss_state.center = ::ad::map::point::createENUPoint(
-      static_cast<double>(agent_state(X_POSITION)),
-      static_cast<double>(agent_state(Y_POSITION)), 0.);
-  rss_state.heading = ::ad::map::point::createENUHeading(
-      static_cast<double>(agent_state(THETA_POSITION)));
-  rss_state.speed = Speed(static_cast<double>(agent_state(VEL_POSITION)));
+      agent_state(X_POSITION), agent_state(Y_POSITION), 0.);
+  rss_state.heading =
+      ::ad::map::point::createENUHeading(agent_state(THETA_POSITION));
+  rss_state.speed = Speed(agent_state(VEL_POSITION));
   rss_state.min_stopping_distance =
       CalculateMinStoppingDistance(rss_state.speed, agent_dynamics);
 
@@ -213,8 +224,7 @@ Distance RssInterface::CalculateMinStoppingDistance(
     const ::ad::rss::world::RssDynamics &ego_dynamics,
     const ::ad::map::route::FullRoute &ego_route) {
   std::vector<AgentPtr> relevent_agents;
-  double const relevant_distance =
-      static_cast<double>(ego_rss_state.min_stopping_distance);
+  double const relevant_distance = ego_rss_state.min_stopping_distance;
 
   geometry::Point2d ego_center(ego_rss_state.center.x, ego_rss_state.center.y);
 
@@ -283,33 +293,202 @@ bool RssInterface::RssCheck(::ad::rss::world::WorldModel world_model) {
   return is_agent_safe;
 }
 
-bool RssInterface::IsAgentSafe(const World &world, const AgentId &agent_id) {
-  AgentPtr agent = world.GetAgent(agent_id);
-  models::dynamic::State agent_state = agent->GetCurrentState();
+std::vector<opendrive::XodrLaneId> FindIntersection(
+    const std::vector<opendrive::XodrLaneId> &route_1,
+    const std::vector<opendrive::XodrLaneId> &route_2) {
+  std::vector<opendrive::XodrLaneId> _r1 = route_1;
+  std::vector<opendrive::XodrLaneId> _r2 = route_2;
+  std::vector<opendrive::XodrLaneId> intersection;
+
+  std::sort(_r1.begin(), _r1.end());
+  std::sort(_r2.begin(), _r2.end());
+
+  std::set_intersection(_r1.begin(), _r1.end(), _r2.begin(), _r2.end(),
+                        back_inserter(intersection));
+
+  return intersection;
+}
+
+std::vector<opendrive::XodrLaneId> GetDriveableLanePathToGoal(
+    const world::map::MapInterfacePtr &map, const AgentPtr &agent) {
+  std::vector<opendrive::XodrLaneId> path;
+
+  models::dynamic::Trajectory traj = agent->GetExecutionTrajectory();
+  models::dynamic::State state = traj.row(traj.rows() - 1);
+  Point2d center = Point2d(state(X_POSITION), state(Y_POSITION));
+
+  auto goal_pose = agent->GetGoalDefinition()->GetShape().center_;
+  Point2d goal_pt(goal_pose(0), goal_pose(1));
+
+  auto start_lane = map->FindXodrLane(center);
+  auto start_lane_idx = start_lane->GetId();
+  auto goal_lane = map->FindXodrLane(goal_pt);
+  auto goal_lane_idx = goal_lane->GetId();
+
+  path =
+      map->GetRoadgraph()->FindDrivableLanePath(start_lane_idx, goal_lane_idx);
+  return path;
+}
+
+std::pair<float, float> GetLaneWidth(const map::LanePtr &lane) {
+  // TODO get min&max width along lane
+  geometry::Line left_boundary = lane->GetLeftBoundary().GetLine();
+  geometry::Line right_boundary = lane->GetRightBoundary().GetLine();
+
+  float d = geometry::Distance(left_boundary, right_boundary);
+  return std::make_pair(d, d);
+}
+
+std::pair<float, float> GetLaneLength(const map::LanePtr &lane) {
+  geometry::Line left_boundary = lane->GetLeftBoundary().GetLine();
+  geometry::Line right_boundary = lane->GetRightBoundary().GetLine();
+
+  return std::make_pair(
+      std::min(left_boundary.Length(), right_boundary.Length()),
+      std::max(left_boundary.Length(), right_boundary.Length()));
+}
+
+::ad::rss::world::RoadArea CreateRssRoadArea(
+    const map::RoadPtr &road,
+    const std::vector<opendrive::XodrLaneId> &intersect) {
+
+  ::ad::rss::world::RoadArea rssRoadArea;
+
+  map::RoadPtr next_road(road);
+
+  bool isIntersect = false;
+  bool inIntersect = false;
+  while (next_road != nullptr) {
+    ::ad::rss::world::RoadSegment rssRoadSegment;
+
+    for (auto const &lane : next_road->GetLanes()) {
+      if (lane.second->GetLaneType() == 1) {
+        auto lane_id = lane.first;
+        ::ad::rss::world::LaneSegment rssLaneSegment;
+        rssLaneSegment.id = ::ad::rss::world::LaneSegmentId(lane_id);
+
+        isIntersect = std::find(intersect.begin(), intersect.end(), lane_id) !=
+                      intersect.end();
+        if (isIntersect)
+          rssLaneSegment.type = ::ad::rss::world::LaneSegmentType::Intersection;
+        else
+          rssLaneSegment.type = ::ad::rss::world::LaneSegmentType::Normal;
+
+        switch (lane.second->GetDrivingDirection()) {
+          case 0:
+            rssLaneSegment.drivingDirection =
+                ::ad::rss::world::LaneDrivingDirection::Positive;
+          case 1:
+            rssLaneSegment.drivingDirection =
+                ::ad::rss::world::LaneDrivingDirection::Negative;
+          case 2:
+            rssLaneSegment.drivingDirection =
+                ::ad::rss::world::LaneDrivingDirection::Bidirectional;
+        }
+
+        auto length_range = GetLaneLength(lane.second);
+        rssLaneSegment.length.minimum = Distance(length_range.first);
+        rssLaneSegment.length.maximum = Distance(length_range.second);
+
+        auto width_range = GetLaneWidth(lane.second);
+        rssLaneSegment.width.minimum = Distance(width_range.first);
+        rssLaneSegment.width.maximum = Distance(width_range.second);
+
+        // speed
+
+        rssRoadSegment.push_back(rssLaneSegment);
+        if (isIntersect && !inIntersect)
+          inIntersect = true;
+        else if (!isIntersect && inIntersect)
+          break;
+      }
+    }
+    if (!isIntersect && inIntersect) {
+      break;
+    }
+    rssRoadArea.push_back(rssRoadSegment);
+    next_road = next_road->GetNextRoad();
+  }
+
+  return rssRoadArea;
+}
+
+::ad::rss::world::OccupiedRegion CreateOccupiedRegion(){
+
+}
+
+std::pair<float,float> calculateParametricValue(const map::LanePtr &lane,const Point2d& pt){
+  // using namespace geometry;
+  auto center_line = lane->GetCenterLine();
+  auto left_boundary=lane->GetLeftBoundary().GetLine();
+
+  float s = geometry::GetNearestS(center_line, pt);
+  float d = geometry::Distance(left_boundary, pt);
+
+  auto width=GetLaneWidth(lane);
+  auto length=GetLaneLength(lane);
+  float w=(width.first+width.second)/2;
+  float l=(length.first+length.second)/2;
+
+  return std::make_pair(s/w,d/l);
+}
+
+bool RssInterface::IsAgentSafe(const World &world, const AgentId &agent_idx) {
+  world::map::MapInterfacePtr map = world.GetMap();
+
+  AgentPtr agent = world.GetAgent(agent_idx);
+  models::dynamic::Trajectory traj = agent->GetExecutionTrajectory();
+  models::dynamic::State agent_state = traj.row(traj.rows() - 1);
+  Point2d ego_center =
+      Point2d(agent_state(X_POSITION), agent_state(Y_POSITION));
+  auto ego_road_idx = map->FindCurrentRoad(ego_center);
 
   Polygon agent_shape = agent->GetShape();
   ::ad::map::match::Object matched_object =
       GetMatchObject(agent_state, agent_shape, Distance(2.0));
 
-  Point2d agent_center =
-      Point2d(agent_state(X_POSITION), agent_state(Y_POSITION));
   map::RoadCorridorPtr agent_road_corridor = agent->GetRoadCorridor();
-  map::LaneId agent_lane_id = world.GetMap()->FindCurrentLane(agent_center);
-  map::LaneCorridorPtr agent_lane_corridor =
-      agent_road_corridor->GetLaneCorridor(agent_lane_id);
-  ::ad::map::route::FullRoute agent_route =
-      GenerateRoute(agent_center, agent_lane_corridor, matched_object);
 
-  ::ad::rss::world::RssDynamics agent_dynamics =
-      GenerateDefaultVehicleDynamicsParameters();
-  AgentState agent_rss_state = ConvertAgentState(agent_state, agent_dynamics);
+  std::vector<opendrive::XodrLaneId> ego_lane_path_indices =
+      GetDriveableLanePathToGoal(map, agent);
+
+  map::LanePtr agent_lane =
+      agent_road_corridor->GetCurrentLaneCorridor(ego_center)
+          ->GetCurrentLane(ego_center);
+
+
+  
+  
+  
+  // std::vector<uint32_t> ego_lanes;
+  // for (auto const& lane:agent_road_corridor->GetLaneCorridorMap()){
+  //   std::cout<< "test 1: " << lane.first << std::endl;
+  //   ego_lanes.push_back(lane.first);
+  // }
 
   AgentMap other_agents = world.GetAgents();
-  ::ad::rss::world::WorldModel rss_world_model =
-      CreateWorldModel(other_agents, agent_id, agent_rss_state, matched_object,
-                       agent_dynamics, agent_route);
+  std::vector<opendrive::XodrLaneId> intersect;
 
-  return RssCheck(rss_world_model);
+  for (auto const &other_agent : other_agents) {
+    if (other_agent.first == agent_idx) continue;
+
+    std::vector<opendrive::XodrLaneId> other_lane_path_indices =
+        GetDriveableLanePathToGoal(map, other_agent.second);
+
+    intersect =
+        FindIntersection(ego_lane_path_indices, other_lane_path_indices);
+  }
+
+  auto road = agent_road_corridor->GetRoad(ego_road_idx);
+  ::ad::rss::world::RoadArea rssRoadArea = CreateRssRoadArea(road, intersect);
+
+  // for (const auto &lane_id : ego_lane_path_indices) {
+  //   std::cout <<"Road id: " <<ego_road_idx <<", lane_id: "
+  //   <<lane_id<< std::endl;
+  //   relevent_lane_corrs.push_back(agent_road_corridor->GetLaneCorridor(lane_id));
+  // }
+
+  return true;
 }
 
 }  // namespace evaluation
